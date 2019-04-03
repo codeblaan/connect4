@@ -1,0 +1,273 @@
+<!doctype html>
+<html>
+<head>
+    <title>connect4</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        #root {
+            display: grid;
+            height: 100vh;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+            background-color: #ffe082;
+        }
+
+        .box {
+            border: 10px solid #ffe082;
+            border-radius: 50%;
+            background-color: #fafafa;
+            transition: 0.25s;
+        }
+
+        .box--dim {
+            opacity: 0.7;
+        }
+
+        .box--top {
+            border: none;
+            border-radius: 0;
+            background-color: #fafafa;
+        }
+
+        .box--win {
+            animation: blinker 2s linear infinite;
+        }
+
+        .box--1 {
+            background-color: #3f51b5;
+        }
+
+        .box--2 {
+            background-color: #e91e63;
+        }
+
+        .box:hover {
+            cursor: pointer;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        @keyframes blinker {
+            50% {
+                opacity: 0;
+            }
+        }
+
+    </style>
+    <script>
+        class Board {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+
+            this.values = [];
+            for (let i = 0; i < y; i++) {
+              this.values.push([]);
+            }
+          }
+
+          add(y, playerNumber) {
+            if (this.values[y].length < this.x) {
+              this.values[y].push(new Tile(playerNumber));
+            }
+          }
+
+          getWonTiles() {
+            const lines = {
+              columns: {},
+              rows: {},
+              diagonalUp: {},
+              diagonalDown: {}
+            };
+
+            for (let i = 0; i < this.y; i++) {
+              for (let j = 0; j < this.x; j++) {
+                let tile = this.values[i][j];
+
+                if (lines.columns[i] === undefined) {
+                  lines.columns[i] = [tile];
+                } else {
+                  lines.columns[i].push(tile);
+                }
+
+                if (lines.rows[j] === undefined) {
+                  lines.rows[j] = [tile];
+                } else {
+                  lines.rows[j].push(tile);
+                }
+
+                if (lines.diagonalUp[j-i] === undefined) {
+                  lines.diagonalUp[j-i] = [tile];
+                } else {
+                  lines.diagonalUp[j-i].push(tile);
+                }
+
+                if (lines.diagonalDown[i+j] === undefined) {
+                  lines.diagonalDown[i+j] = [tile];
+                } else {
+                  lines.diagonalDown[i+j].push(tile);
+                }
+              }
+            }
+
+            for (let key in lines) {
+              let tiles = this._getWonTiles(lines[key]);
+              if (tiles.length === 4) {
+                return tiles;
+              }
+            }
+            return [];
+          }
+
+          _getWonTiles(hash) {
+            const keys = Object.keys(hash);
+            let tiles = [];
+            for (let i = 0; i < keys.length; i++) {
+              tiles = [];
+              if (hash[keys[i]].length > 3) {
+                for (let j = 0; j < hash[keys[i]].length; j++) {
+                  let t = hash[keys[i]][j];
+                  if (tiles.length === 0 && t !== undefined) {
+                    tiles = [t];
+                  } else if (t === undefined) {
+                    tiles = [];
+                  } else if (t !== undefined) {
+                    let tile = tiles.pop();
+                    if (tile.playerNumber === t.playerNumber) {
+                      tiles.push(tile);
+                      tiles.push(t);
+                    } else {
+                      tiles = [t];
+                    }
+                  }
+                  if (tiles.length === 4) {
+                    return tiles;
+                  }
+                }
+              }
+            }
+            return [];
+          }
+        }
+
+        class Player {
+          constructor() {
+            this.turn = 0;
+            this.players = [1, 2];
+            this.number = this.players[this.turn];
+          }
+
+          next() {
+            this.turn++;
+            this.number = this.players[this.turn % this.players.length];
+          }
+        }
+
+        class Tile {
+          constructor(playerNumber) {
+            this.playerNumber = playerNumber;
+          }
+        }
+
+        class Game {
+          constructor(rootEl, board, player) {
+            this.rootEl = rootEl;
+            this.board = board;
+            this.player = player;
+            this.isGameOver = false;
+          }
+
+          buildHTMLElements() {
+            for (let i = 0; i < this.board.x+1; i++) {
+              for (let j = 0; j < this.board.y; j++) {
+                let el = document.createElement('div');
+                if (i === 0) {
+                  el.classList.add('box--top');
+                }
+                el.addEventListener('mouseenter', function(e) {
+                  let y = e.target.dataset.y;
+                  let columnEls = this.rootEl.querySelectorAll(`[data-y="${y}"]`);
+                  columnEls.forEach(columnEl => {
+                    if (columnEl.dataset.x === "0") {
+                      columnEl.classList.add(`box--${this.player.number}`);
+                    }
+                    columnEl.classList.add('box--dim');
+                  })
+                }.bind(this));
+                el.addEventListener('mouseleave', function(e) {
+                  let y = e.target.dataset.y;
+                  let columnEls = this.rootEl.querySelectorAll(`[data-y="${y}"]`);
+                  columnEls.forEach(columnEl => {
+                    if (columnEl.dataset.x === "0") {
+                      columnEl.classList.remove('box--1');
+                      columnEl.classList.remove('box--2');
+                    }
+                    columnEl.classList.remove('box--dim');
+                  })
+                }.bind(this));
+                el.addEventListener('click', function(e) {
+                  if (this.isGameOver) return;
+                  let y = e.target.dataset.y;
+                  this.board.add(y, this.player.number);
+                  this.player.next();
+                  this.draw();
+                }.bind(this));
+                el.dataset.x = i;
+                el.dataset.y = j;
+                el.classList.add('box');
+                this.rootEl.appendChild(el);
+              }
+            }
+          }
+
+          draw() {
+            let winningTiles = this.board.getWonTiles();
+            for (let i = 0; i < this.board.values.length; i++) {
+              for (let j = 0; j < this.board.values[i].length; j++) {
+                let x = this.board.x - j;
+                let y = i;
+                let el = this.rootEl.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+                let tile = this.board.values[i][j];
+                if (winningTiles.includes(tile)) {
+                  el.classList.add(`box--win`);
+                }
+                el.classList.add(`box--${tile.playerNumber}`);
+              }
+            }
+            this.rootEl.querySelectorAll(`[data-x="0"]`).forEach(el => {
+              if (el.classList.contains('box--1')) {
+                el.classList.remove('box--1');
+                el.classList.add('box--2');
+              } else if (el.classList.contains('box--2')) {
+                el.classList.remove('box--2');
+                el.classList.add('box--1');
+              }
+            });
+
+            if (winningTiles.length > 0) {
+              this.isGameOver = true;
+
+            }
+          }
+        }
+
+        window.onload = function() {
+          let rootEl = document.getElementById('root');
+          const game = new Game(rootEl, new Board(6,7), new Player());
+          game.buildHTMLElements();
+        }
+
+
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>
