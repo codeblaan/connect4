@@ -1,4 +1,4 @@
 Connect 4
 =========
 
-[play game](https://github.com/codeblaan/connect4)
+[play](https://codeblaan.github.io/connect4/)
