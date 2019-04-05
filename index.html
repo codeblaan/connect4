@@ -341,7 +341,7 @@
 
           game.buildHTMLElements();
 
-          const ws = new WebSocket('ws://players-api1.herokuapp.com');
+          const ws = new WebSocket('wss://players-api1.herokuapp.com');
           ws.onopen = () => {
             game.setWebSocket(ws);
           };
