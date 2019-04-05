@@ -36,11 +36,11 @@
             animation: blinker 2s linear infinite;
         }
 
-        .box--1 {
+        .box--0 {
             background-color: #3f51b5;
         }
 
-        .box--2 {
+        .box--1 {
             background-color: #e91e63;
         }
 
@@ -48,10 +48,40 @@
             cursor: pointer;
         }
 
-        .overlay {
+        .status {
+            opacity: 0;
             position: absolute;
+            display: flex;
+            justify-content: center;
             top: 0;
             left: 0;
+            right: 0;
+            z-index: 10;
+            transition: 0.5s;
+        }
+
+        .status--show {
+            opacity: 1;
+        }
+
+        .status-box {
+            height: 10vh;
+            width: 90vw;
+            background-color: #00bcd4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 30px;
+            font-family: sans-serif;
+        }
+
+        .status-rematch {
+            display: none;
+        }
+
+        .status-rematch--show {
+            display: block;
         }
 
         @keyframes blinker {
@@ -157,19 +187,6 @@
           }
         }
 
-        class Player {
-          constructor() {
-            this.turn = 0;
-            this.players = [1, 2];
-            this.number = this.players[this.turn];
-          }
-
-          next() {
-            this.turn++;
-            this.number = this.players[this.turn % this.players.length];
-          }
-        }
-
         class Tile {
           constructor(playerNumber) {
             this.playerNumber = playerNumber;
@@ -177,11 +194,65 @@
         }
 
         class Game {
-          constructor(rootEl, board, player) {
+          constructor(rootEl, statusEl, board) {
             this.rootEl = rootEl;
+            this.statusEl = statusEl;
             this.board = board;
-            this.player = player;
+
+            this.ws = null;
+            this.playerNumber = null;
+
+            this.id = null;
             this.isGameOver = false;
+            this.isTurn = false;
+
+            this.setStatus('Awaiting other player...');
+          }
+
+          setWebSocket(ws) {
+            this.ws = ws;
+            this.ws.onmessage = e => {
+              let data = JSON.parse(e.data);
+              console.log(data);
+              if (data.event === 'CONNECTED') {
+                // starting game
+                this.id = data.id;
+                this.playerNumber = data.playerNumber;
+                this.isTurn = data.playerNumber === 0;
+                if (this.isTurn) {
+                  this.setStatus('Your turn!');
+                }
+              } else if (data.event === 'AWAITING_PLAYER') {
+                // waiting for next player
+              } else if (data.event === 'ACTIVE_TURN') {
+                this.setStatus('Your turn!');
+                this.setBoard(data.board);
+                this.isTurn = true;
+              }
+            };
+          }
+
+          setStatus(text) {
+            if (!this.statusEl.classList.contains('status--show')) {
+              this.statusEl.classList.add('status--show');
+            }
+            this.statusEl.querySelector('#status-text').innerText = text;
+          }
+
+          next() {
+            this.isTurn = false;
+            this.setStatus('Awaiting other player...');
+            let data = {
+              board: this.board.values,
+              id: this.id,
+              playerNumber: this.playerNumber
+            };
+            this.ws.send(JSON.stringify(data));
+          }
+
+          setBoard(boardValues) {
+            this.board.values = boardValues;
+            this.draw();
           }
 
           buildHTMLElements() {
@@ -196,7 +267,7 @@
                   let columnEls = this.rootEl.querySelectorAll(`[data-y="${y}"]`);
                   columnEls.forEach(columnEl => {
                     if (columnEl.dataset.x === "0") {
-                      columnEl.classList.add(`box--${this.player.number}`);
+                      columnEl.classList.add(`box--${this.playerNumber}`);
                     }
                     columnEl.classList.add('box--dim');
                   })
@@ -206,17 +277,18 @@
                   let columnEls = this.rootEl.querySelectorAll(`[data-y="${y}"]`);
                   columnEls.forEach(columnEl => {
                     if (columnEl.dataset.x === "0") {
+                      columnEl.classList.remove('box--0');
                       columnEl.classList.remove('box--1');
-                      columnEl.classList.remove('box--2');
                     }
                     columnEl.classList.remove('box--dim');
                   })
                 }.bind(this));
                 el.addEventListener('click', function(e) {
+                  if (!this.isTurn) return;
                   if (this.isGameOver) return;
                   let y = e.target.dataset.y;
-                  this.board.add(y, this.player.number);
-                  this.player.next();
+                  this.board.add(y, this.playerNumber);
+                  this.next();
                   this.draw();
                 }.bind(this));
                 el.dataset.x = i;
@@ -253,21 +325,37 @@
 
             if (winningTiles.length > 0) {
               this.isGameOver = true;
-
+              if (winningTiles[0].playerNumber === this.playerNumber) {
+                this.setStatus('You WON!!!!');
+              } else {
+                this.setStatus('You lost :(');
+              }
             }
           }
         }
 
         window.onload = function() {
-          let rootEl = document.getElementById('root');
-          const game = new Game(rootEl, new Board(6,7), new Player());
+          const rootEl = document.getElementById('root');
+          const statusEl = document.getElementById('status');
+          const game = new Game(rootEl, statusEl, new Board(6,7));
+
           game.buildHTMLElements();
+
+          const ws = new WebSocket('ws://players-api1.herokuapp.com');
+          ws.onopen = () => {
+            game.setWebSocket(ws);
+          };
         }
 
 
     </script>
 </head>
 <body>
+    <div id="status" class="status">
+        <div class="status-box">
+            <div id="status-text"></div>
+        </div>
+    </div>
     <div id="root"></div>
 </body>
 </html>
